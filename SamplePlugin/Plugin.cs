@@ -1,86 +1,83 @@
-﻿using Dalamud.Game.Command;
-using Dalamud.IoC;
+﻿using Dalamud.IoC;
 using Dalamud.Plugin;
-using System.IO;
-using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
-using SamplePlugin.Windows;
+// Crucial: This namespace houses the game character interfaces in modern Dalamud
+using Dalamud.Game.ClientState.Objects.Types; 
+using Dalamud.Game.ClientState.Objects.SubKinds;
+using System;
+using System.IO;
 
-namespace SamplePlugin;
-
-public sealed class Plugin : IDalamudPlugin
+public class TelemetryLoggerPlugin : IDalamudPlugin
 {
-    [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
-    [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
-    [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
-    [PluginService] internal static IClientState ClientState { get; private set; } = null!;
-    [PluginService] internal static IPlayerState PlayerState { get; private set; } = null!;
-    [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
-    [PluginService] internal static IPluginLog Log { get; private set; } = null!;
+    public string Name => "Monk Telemetry Logger";
 
-    private const string CommandName = "/pmycommand";
+    // Injecting the ObjectTable service where LocalPlayer now lives
+    [PluginService] public static IObjectTable ObjectTable { get; private set; } = null!;
+    [PluginService] public static IFramework Framework { get; private set; } = null!;
 
-    public Configuration Configuration { get; init; }
+    private readonly string logFilePath;
+    private bool isLogging = false;
 
-    public readonly WindowSystem WindowSystem = new("SamplePlugin");
-    private ConfigWindow ConfigWindow { get; init; }
-    private MainWindow MainWindow { get; init; }
-
-    public Plugin()
+    public TelemetryLoggerPlugin()
     {
-        Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+        var docsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        logFilePath = Path.Combine(docsPath, "ffxiv_duel_telemetry.csv");
 
-        // You might normally want to embed resources and load them from the manifest stream
-        var goatImagePath = Path.Combine(PluginInterface.AssemblyLocation.Directory?.FullName!, "goat.png");
-
-        ConfigWindow = new ConfigWindow(this);
-        MainWindow = new MainWindow(this, goatImagePath);
-
-        WindowSystem.AddWindow(ConfigWindow);
-        WindowSystem.AddWindow(MainWindow);
-
-        CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
+        if (!File.Exists(logFilePath))
         {
-            HelpMessage = "A useful message to display in /xlhelp"
-        });
+            File.WriteAllText(logFilePath, "Timestamp,pX,pZ,pRot,tX,tZ,tRot,Distance,FacingDelta\n");
+        }
 
-        // Tell the UI system that we want our windows to be drawn through the window system
-        PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
+        Framework.Update += OnFrameworkUpdate;
+        isLogging = true;
+    }
 
-        // This adds a button to the plugin installer entry of this plugin which allows
-        // toggling the display status of the configuration ui
-        PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
+    private void OnFrameworkUpdate(IFramework framework)
+    {
+        if (!isLogging) return;
 
-        // Adds another button doing the same but for the main ui of the plugin
-        PluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
+        // FIXED: Pulling LocalPlayer directly from the ObjectTable service per API 14 specifications
+        var player = ObjectTable.LocalPlayer;
+        if (player == null) return;
 
-        // Add a simple message to the log with level set to information
-        // Use /xllog to open the log window in-game
-        // Example Output: 00:57:54.959 | INF | [SamplePlugin] ===A cool log message from Sample Plugin===
-        Log.Information($"===A cool log message from {PluginInterface.Manifest.Name}===");
+        var target = player.TargetObject as IPlayerCharacter;
+        if (target == null) return;
+
+        float pX = player.Position.X;
+        float pZ = player.Position.Z; 
+        float pRot = player.Rotation;
+
+        float tX = target.Position.X;
+        float tZ = target.Position.Z;
+        float tRot = target.Rotation;
+
+        double distance = Math.Sqrt(Math.Pow(pX - tX, 2) + Math.Pow(pZ - tZ, 2));
+        double facingDelta = CalculateFacingAngle(pRot, pX, pZ, tX, tZ);
+
+        long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        string csvLine = $"{timestamp},{pX:F3},{pZ:F3},{pRot:F3},{tX:F3},{tZ:F3},{tRot:F3},{distance:F3},{facingDelta:F2}\n";
+        
+        File.AppendAllText(logFilePath, csvLine);
+    }
+
+    private double CalculateFacingAngle(float rot, float ax, float az, float tx, float tz)
+    {
+        double dirX = Math.Sin(rot);
+        double dirZ = Math.Cos(rot);
+        double diffX = tx - ax;
+        double diffZ = tz - az;
+        double magn = Math.Sqrt(diffX * diffX + diffZ * diffZ);
+
+        if (magn == 0) return 0;
+        
+        double dot = ((dirX * (diffX / magn)) + (dirZ * (diffZ / magn)));
+        dot = Math.Max(-1.0, Math.Min(1.0, dot));
+        
+        return Math.Acos(dot) * (180.0 / Math.PI);
     }
 
     public void Dispose()
     {
-        // Unregister all actions to not leak anything during disposal of plugin
-        PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
-        PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
-        PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
-        
-        WindowSystem.RemoveAllWindows();
-
-        ConfigWindow.Dispose();
-        MainWindow.Dispose();
-
-        CommandManager.RemoveHandler(CommandName);
+        Framework.Update -= OnFrameworkUpdate;
     }
-
-    private void OnCommand(string command, string args)
-    {
-        // In response to the slash command, toggle the display status of our main ui
-        MainWindow.Toggle();
-    }
-    
-    public void ToggleConfigUi() => ConfigWindow.Toggle();
-    public void ToggleMainUi() => MainWindow.Toggle();
 }
