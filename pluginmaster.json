@@ -2,16 +2,22 @@
   {
     "Author": "Akira",
     "Name": "Monk Telemetry Logger",
+    "Punchline": "High-precision telemetry logging engine for Monk duels.",
+    "Description": "High-precision vector and combat tracking telemetry engine for Monk mirror matches.",
     "InternalName": "MonkTelemetry",
     "AssemblyVersion": "1.0.0.0",
-    "Description": "High-precision vector and combat tracking telemetry engine for Monk mirror matches.",
-    "Punchline": "High-precision telemetry logging engine for Monk duels.",
+    "TestingAssemblyVersion": "1.0.0.0",
+    "RepoUrl": "https://github.com/AkiraEgawa/FFXIVPlugin",
     "ApplicableVersion": "any",
     "DalamudApiLevel": 15,
-    "IsHide": false,
-    "IsTestingExclusive": false,
+    "TestingDalamudApiLevel": 15,
+    "IsHide": "False",
+    "IsTestingExclusive": "False",
     "DownloadCount": 0,
-    "DownloadLinkInstall": "https://raw.githubusercontent.com/AkiraEgawa/FFXIVPlugin/master/latest.zip",
-    "DownloadLinkUpdate": "https://raw.githubusercontent.com/AkiraEgawa/FFXIVPlugin/master/latest.zip"
+    "LastUpdate": 0,
+    "LoadSync": true,
+    "DownloadLinkInstall": "https://github.com/AkiraEgawa/FFXIVPlugin/releases/download/1.0.0/latest.zip",
+    "DownloadLinkTesting": "https://github.com/AkiraEgawa/FFXIVPlugin/releases/download/1.0.0/latest.zip",
+    "DownloadLinkUpdate": "https://github.com/AkiraEgawa/FFXIVPlugin/releases/download/1.0.0/latest.zip"
   }
 ]
