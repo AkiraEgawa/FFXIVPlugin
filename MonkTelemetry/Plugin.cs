@@ -7,7 +7,7 @@ using System;
 using System.IO;
 using System.Collections.Concurrent;
 
-namespace SamplePlugin
+namespace MonkTelemetry
 {
     public class Plugin : IDalamudPlugin
     {
@@ -17,17 +17,11 @@ namespace SamplePlugin
         [PluginService] public static IFramework Framework { get; private set; } = null!;
         [PluginService] public static IPluginLog PluginLog { get; private set; } = null!;
         [PluginService] public static ICondition Condition { get; private set; } = null!;
-        
-        // 1. Inject the Action Effect Notification service to catch packet bursts
-        [PluginService] public static IActionEffectNotification ActionEffectNotification { get; private set; } = null!;
 
         private readonly string logFilePath;
         private readonly ConcurrentQueue<string> dataQueue = new();
         private int diagnosticCounter = 0;
         private bool wasInDuel = false;
-
-        // Persistent tracker to hold the last validated action ID fired by the target
-        private uint lastTargetActionId = 0;
 
         public Plugin(IDalamudPluginInterface pluginInterface)
         {
@@ -37,26 +31,6 @@ namespace SamplePlugin
             EnsureFileHeader();
 
             Framework.Update += OnFrameworkUpdate;
-            
-            // 2. Subscribe to the raw server/client action notification pipeline
-            ActionEffectNotification.ActionEffectEvent += OnActionEffectEvent;
-        }
-
-        private void OnActionEffectEvent(ActionEffectEventArgs args)
-        {
-            // Only process packet updates if you are actively locked inside a duel profile
-            if (!Condition[ConditionFlag.BoundByDuty56]) return;
-
-            var player = ObjectTable.LocalPlayer;
-            if (player == null) return;
-
-            // 3. Catch the packet if and ONLY if the source actor matches your target's unique ID
-            var target = player.TargetObject;
-            if (target != null && args.SourceId == target.GameObjectId)
-            {
-                // Update our tracker with the true game database Action ID
-                lastTargetActionId = args.ActionId;
-            }
         }
 
         private void OnFrameworkUpdate(IFramework framework)
@@ -67,7 +41,6 @@ namespace SamplePlugin
             {
                 PluginLog.Information("Telemetry Logger: Match start detected! Commencing frame logging.");
                 dataQueue.Enqueue($"{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},MATCH_START,0,0,0,0,0,0,0,0,0,0");
-                lastTargetActionId = 0; // Reset tracking bounds
             }
             else if (!isInDuel && wasInDuel)
             {
@@ -95,6 +68,7 @@ namespace SamplePlugin
             
             uint tCurrentHP = 0;
             uint tMaxHP = 0;
+            uint tLastFiredActionId = 0;
 
             var target = player.TargetObject;
             
@@ -112,12 +86,21 @@ namespace SamplePlugin
 
                 tCurrentHP = battleTarget.CurrentHp;
                 tMaxHP = battleTarget.MaxHp;
+
+                // Safe direct pointer read using explicit memory offsets
+                unsafe
+                {
+                    byte* charaBaseAddress = (byte*)battleTarget.Address;
+                    if (charaBaseAddress != null)
+                    {
+                        tLastFiredActionId = *(ushort*)(charaBaseAddress + 0x1E0);
+                    }
+                }
             }
 
             long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             
-            // 4. Incorporate the persistent action tracker into the log structure
-            string csvLine = $"{timestamp},{pX:F3},{pZ:F3},{pRot:F3},{tX:F3},{tZ:F3},{tRot:F3},{distance:F3},{facingDelta:F2},{tCurrentHP},{tMaxHP},{lastTargetActionId}";
+            string csvLine = $"{timestamp},{pX:F3},{pZ:F3},{pRot:F3},{tX:F3},{tZ:F3},{tRot:F3},{distance:F3},{facingDelta:F2},{tCurrentHP},{tMaxHP},{tLastFiredActionId}";
             
             dataQueue.Enqueue(csvLine);
 
@@ -156,7 +139,7 @@ namespace SamplePlugin
                     var lines = File.ReadAllLines(logFilePath);
                     if (lines.Length > 0 && !lines[0].Contains("tLastFiredActionId"))
                     {
-                        File.Delete(logFilePath); // Overwrite stale schemas cleanly
+                        File.Delete(logFilePath);
                     }
                 }
 
@@ -190,7 +173,6 @@ namespace SamplePlugin
         public void Dispose()
         {
             Framework.Update -= OnFrameworkUpdate;
-            ActionEffectNotification.ActionEffectEvent -= OnActionEffectEvent;
             FlushQueueToFile();
         }
     }

@@ -1,0 +1,14 @@
+{
+  "Author": "Akira",
+  "Name": "MonkTelemetry",
+  "InternalName": "MonkTelemetry",
+  "AssemblyVersion": "1.0.0.0",
+  "Punchline": "High-Precision Telemetry logging engine for Monk Duels",
+  "Description": "Stores all data in a csv file in Documents (Might add feature to customize location)",
+  "ApplicableVersion": "any",
+  "Tags": [
+    "sample",
+    "plugin",
+    "goats"
+  ]
+}
