@@ -11,7 +11,7 @@
     "IsHide": false,
     "IsTestingExclusive": false,
     "DownloadCount": 0,
-    "DownloadLinkInstall": "https://github.com/AkiraEgawa/FFXIVPlugin/releases/download/1.0.0/latest.zip",
-    "DownloadLinkUpdate": "https://github.com/AkiraEgawa/FFXIVPlugin/releases/download/1.0.0/latest.zip"
+    "DownloadLinkInstall": "https://raw.githubusercontent.com/AkiraEgawa/FFXIVPlugin/master/latest.zip",
+    "DownloadLinkUpdate": "https://raw.githubusercontent.com/AkiraEgawa/FFXIVPlugin/master/latest.zip"
   }
 ]
