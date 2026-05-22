@@ -8,7 +8,7 @@
     "Punchline": "High-precision telemetry logging engine for Monk duels.",
     "ApplicableVersion": "any",
     "DalamudApiLevel": 15,
-    "DownloadLinkInstall": "https://github.com/AkiraEgawa/FFXIVPlugin/raw/amin/latest.zip",
-    "DownloadLinkUpdate": "https://github.com/AkiraEgawa/FFXIVPlugin/raw/amin/latest.zip"
+    "DownloadLinkInstall": "https://github.com/AkiraEgawa/FFXIVPlugin/raw/main/latest.zip",
+    "DownloadLinkUpdate": "https://github.com/AkiraEgawa/FFXIVPlugin/raw/main/latest.zip"
   }
 ]
