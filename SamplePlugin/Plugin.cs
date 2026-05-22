@@ -16,14 +16,18 @@ namespace SamplePlugin
         [PluginService] public static IObjectTable ObjectTable { get; private set; } = null!;
         [PluginService] public static IFramework Framework { get; private set; } = null!;
         [PluginService] public static IPluginLog PluginLog { get; private set; } = null!;
-        
-        // 1. Inject the Game Condition service
         [PluginService] public static ICondition Condition { get; private set; } = null!;
+        
+        // 1. Inject the Action Effect Notification service to catch packet bursts
+        [PluginService] public static IActionEffectNotification ActionEffectNotification { get; private set; } = null!;
 
         private readonly string logFilePath;
         private readonly ConcurrentQueue<string> dataQueue = new();
         private int diagnosticCounter = 0;
         private bool wasInDuel = false;
+
+        // Persistent tracker to hold the last validated action ID fired by the target
+        private uint lastTargetActionId = 0;
 
         public Plugin(IDalamudPluginInterface pluginInterface)
         {
@@ -33,31 +37,47 @@ namespace SamplePlugin
             EnsureFileHeader();
 
             Framework.Update += OnFrameworkUpdate;
+            
+            // 2. Subscribe to the raw server/client action notification pipeline
+            ActionEffectNotification.ActionEffectEvent += OnActionEffectEvent;
+        }
+
+        private void OnActionEffectEvent(ActionEffectEventArgs args)
+        {
+            // Only process packet updates if you are actively locked inside a duel profile
+            if (!Condition[ConditionFlag.BoundByDuty56]) return;
+
+            var player = ObjectTable.LocalPlayer;
+            if (player == null) return;
+
+            // 3. Catch the packet if and ONLY if the source actor matches your target's unique ID
+            var target = player.TargetObject;
+            if (target != null && args.SourceId == target.GameObjectId)
+            {
+                // Update our tracker with the true game database Action ID
+                lastTargetActionId = args.ActionId;
+            }
         }
 
         private void OnFrameworkUpdate(IFramework framework)
         {
-            // 2. Check if the client is actively synchronized inside a PvP duty zone
-            // BoundByDuty56 covers all active instances of instanced PvP engagements
-            bool isInDuel = Condition[ConditionFlag.BoundByDuty56];
+            bool isInDuel = Condition[ConditionFlag.InDuelingArea] && Condition[ConditionFlag.InCombat];
 
-            // Handle session state changes for your tracking logs
             if (isInDuel && !wasInDuel)
             {
                 PluginLog.Information("Telemetry Logger: Match start detected! Commencing frame logging.");
-                dataQueue.Enqueue($"{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},MATCH_START,0,0,0,0,0,0,0");
+                dataQueue.Enqueue($"{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},MATCH_START,0,0,0,0,0,0,0,0,0,0");
+                lastTargetActionId = 0; // Reset tracking bounds
             }
             else if (!isInDuel && wasInDuel)
             {
                 PluginLog.Information("Telemetry Logger: Match concluded. Flushing session buffer to drive.");
-                dataQueue.Enqueue($"{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},MATCH_END,0,0,0,0,0,0,0");
-                FlushQueueToFile(); // Force an immediate drop to disk the second the match wraps up
+                dataQueue.Enqueue($"{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},MATCH_END,0,0,0,0,0,0,0,0,0,0");
+                FlushQueueToFile();
                 diagnosticCounter = 0;
             }
 
             wasInDuel = isInDuel;
-
-            // 3. Early exit guard — if you aren't inside the instance, waste zero CPU cycles
             if (!isInDuel) return;
 
             diagnosticCounter++;
@@ -72,27 +92,35 @@ namespace SamplePlugin
             float tX = 0f, tZ = 0f, tRot = 0f;
             double distance = 0.0;
             double facingDelta = 0.0;
+            
+            uint tCurrentHP = 0;
+            uint tMaxHP = 0;
 
             var target = player.TargetObject;
-            if (target != null)
+            
+            if (target is IBattleChara battleTarget)
             {
-                tX = target.Position.X;
-                tZ = target.Position.Z;
-                tRot = target.Rotation;
+                tX = battleTarget.Position.X;
+                tZ = battleTarget.Position.Z;
+                tRot = battleTarget.Rotation;
 
                 distance = Math.Sqrt(Math.Pow(pX - tX, 2) + Math.Pow(pZ - tZ, 2));
                 if (distance > 0.01)
                 {
                     facingDelta = CalculateFacingAngle(pRot, pX, pZ, tX, tZ);
                 }
+
+                tCurrentHP = battleTarget.CurrentHp;
+                tMaxHP = battleTarget.MaxHp;
             }
 
             long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            string csvLine = $"{timestamp},{pX:F3},{pZ:F3},{pRot:F3},{tX:F3},{tZ:F3},{tRot:F3},{distance:F3},{facingDelta:F2}";
+            
+            // 4. Incorporate the persistent action tracker into the log structure
+            string csvLine = $"{timestamp},{pX:F3},{pZ:F3},{pRot:F3},{tX:F3},{tZ:F3},{tRot:F3},{distance:F3},{facingDelta:F2},{tCurrentHP},{tMaxHP},{lastTargetActionId}";
             
             dataQueue.Enqueue(csvLine);
 
-            // Keep the memory queue tight during the match by flushing in short frame chunks
             if (diagnosticCounter % 15 == 0)
             {
                 FlushQueueToFile();
@@ -123,9 +151,18 @@ namespace SamplePlugin
         {
             try
             {
+                if (File.Exists(logFilePath))
+                {
+                    var lines = File.ReadAllLines(logFilePath);
+                    if (lines.Length > 0 && !lines[0].Contains("tLastFiredActionId"))
+                    {
+                        File.Delete(logFilePath); // Overwrite stale schemas cleanly
+                    }
+                }
+
                 if (!File.Exists(logFilePath))
                 {
-                    File.WriteAllText(logFilePath, "Timestamp,pX,pZ,pRot,tX,tZ,tRot,Distance,FacingDelta\n");
+                    File.WriteAllText(logFilePath, "Timestamp,pX,pZ,pRot,tX,tZ,tRot,Distance,FacingDelta,tCurrentHP,tMaxHP,tLastFiredActionId\n");
                 }
             }
             catch (Exception ex)
@@ -153,6 +190,7 @@ namespace SamplePlugin
         public void Dispose()
         {
             Framework.Update -= OnFrameworkUpdate;
+            ActionEffectNotification.ActionEffectEvent -= OnActionEffectEvent;
             FlushQueueToFile();
         }
     }
