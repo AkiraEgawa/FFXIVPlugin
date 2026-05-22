@@ -16,8 +16,8 @@
     "DownloadCount": 0,
     "LastUpdate": 0,
     "LoadSync": true,
-    "DownloadLinkInstall": "https://github.com/AkiraEgawa/FFXIVPlugin/releases/download/1.0.0/latest.zip",
-    "DownloadLinkTesting": "https://github.com/AkiraEgawa/FFXIVPlugin/releases/download/1.0.0/latest.zip",
-    "DownloadLinkUpdate": "https://github.com/AkiraEgawa/FFXIVPlugin/releases/download/1.0.0/latest.zip"
+    "DownloadLinkInstall": "https://github.com/AkiraEgawa/FFXIVPlugin/releases/download/1.0.0/MonkTelemetry.zip",
+    "DownloadLinkTesting": "https://github.com/AkiraEgawa/FFXIVPlugin/releases/download/1.0.0/MonkTelemetry.zip",
+    "DownloadLinkUpdate": "https://github.com/AkiraEgawa/FFXIVPlugin/releases/download/1.0.0/MonkTelemetry.zip"
   }
 ]
