@@ -3,12 +3,19 @@
   "Name": "MonkTelemetry",
   "InternalName": "MonkTelemetry",
   "AssemblyVersion": "1.0.0.0",
-  "Punchline": "High-Precision Telemetry logging engine for Monk Duels",
   "Description": "Stores all data in a csv file in Documents (Might add feature to customize location)",
   "ApplicableVersion": "any",
   "Tags": [
     "sample",
     "plugin",
     "goats"
-  ]
+  ],
+  "DalamudApiLevel": 15,
+  "LoadRequiredState": 0,
+  "LoadSync": false,
+  "CanUnloadAsync": false,
+  "LoadPriority": 0,
+  "Punchline": "High-Precision Telemetry logging engine for Monk Duels",
+  "AcceptsFeedback": true,
+  "MainImplementationClassName": "MonkTelemetry.Plugin"
 }
